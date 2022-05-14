@@ -1,6 +1,6 @@
 [package]
 name = "asc"
-version = "0.1.0-dev"
+version = "0.1.0"
 edition = "2021"
 description = "Atomic Strong Count"
 license = "MIT"
