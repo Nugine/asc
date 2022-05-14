@@ -4,7 +4,10 @@ version = "0.0.1"
 edition = "2021"
 description = "Atomic Strong Count"
 license = "MIT"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+repository = "https://github.com/Nugine/asc"
+readme = "README.md"
+documentation = "https://docs.rs/asc"
+keywords = ["arc", "ffi", "sync", "data-structure"]
+categories = ["concurrency", "data-structures"]
 
 [dependencies]
