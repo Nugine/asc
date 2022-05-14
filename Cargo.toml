@@ -11,3 +11,4 @@ keywords = ["arc", "ffi", "sync", "data-structure"]
 categories = ["concurrency", "data-structures"]
 
 [dependencies]
+serde = { version = "1.0.137", optional = true, default-features = false }
