@@ -17,6 +17,7 @@ extern crate alloc;
 
 use core::fmt;
 use core::marker::PhantomData;
+use core::mem;
 use core::mem::ManuallyDrop;
 use core::ops::Deref;
 use core::ptr;
@@ -90,6 +91,18 @@ impl<T> Asc<T> {
             Ok(data)
         }
     }
+
+    #[inline]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn, clippy::as_conversions)]
+    pub unsafe fn from_raw(ptr: *const T) -> Self {
+        let offset = mem::size_of::<AtomicUsize>();
+        let inner = ptr.cast::<u8>().sub(offset) as *mut Inner<T>;
+        Self {
+            inner: NonNull::new_unchecked(inner),
+            _marker: PhantomData,
+        }
+    }
 }
 
 impl<T: ?Sized> Asc<T> {
@@ -130,8 +143,21 @@ impl<T: ?Sized> Asc<T> {
 
     #[inline]
     #[must_use]
-    pub unsafe fn get_mut_unchecked(this: &mut Asc<T>) -> &mut T {
+    pub unsafe fn get_mut_unchecked(this: &mut Self) -> &mut T {
         &mut this.inner.as_mut().data
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn as_ptr(this: &Self) -> *const T {
+        unsafe { ptr::addr_of!(this.inner.as_ref().data) }
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn into_raw(this: Self) -> *const T {
+        let this = ManuallyDrop::new(this);
+        Self::as_ptr(&*this)
     }
 }
 
