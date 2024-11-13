@@ -1,9 +1,8 @@
+name: Publish
+
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - 'v*'
+  release:
+    types: [published]
 
 jobs:
   publish:
@@ -12,7 +11,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: taiki-e/install-action@just
       - uses: dtolnay/rust-toolchain@nightly
-      - run: |
-          cargo login ${{ secrets.CRATES_IO_API_TOKEN }}
-          cargo publish --dry-run
-          cargo publish
+      - run: cargo login ${{ secrets.CRATES_IO_API_TOKEN }}
+      - run: cargo publish --dry-run
+      - run: cargo publish
