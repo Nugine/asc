@@ -94,8 +94,8 @@ impl<T> Asc<T> {
 
     #[inline]
     #[must_use]
-    #[allow(clippy::missing_const_for_fn, clippy::as_conversions)]
-    pub unsafe fn from_raw(ptr: *const T) -> Self {
+    #[allow(clippy::as_conversions)]
+    pub const unsafe fn from_raw(ptr: *const T) -> Self {
         let offset = mem::size_of::<AtomicUsize>();
         let inner = ptr.cast::<u8>().sub(offset) as *mut Inner<T>;
         Self {
@@ -106,14 +106,13 @@ impl<T> Asc<T> {
 }
 
 impl<T: ?Sized> Asc<T> {
-    #[allow(clippy::missing_const_for_fn)] // nightly
-    fn strong(&self) -> &AtomicUsize {
+    const fn strong(&self) -> &AtomicUsize {
         unsafe { &self.inner.as_ref().strong }
     }
 
     #[inline]
     #[must_use]
-    pub fn shallow_clone(&self) -> Self {
+    fn shallow_clone(&self) -> Self {
         let s = self.strong();
         let old = s.fetch_add(1, Relaxed);
 
@@ -148,10 +147,9 @@ impl<T: ?Sized> Asc<T> {
         &mut this.inner.as_mut().data
     }
 
-    #[allow(clippy::missing_const_for_fn)] // nightly
     #[inline]
     #[must_use]
-    pub fn as_ptr(this: &Self) -> *const T {
+    pub const fn as_ptr(this: &Self) -> *const T {
         unsafe { ptr::addr_of!(this.inner.as_ref().data) }
     }
 
