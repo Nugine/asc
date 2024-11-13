@@ -2,7 +2,7 @@
     clippy::all,
     clippy::as_conversions,
     clippy::float_arithmetic,
-    clippy::integer_arithmetic,
+    clippy::arithmetic_side_effects,
     clippy::must_use_candidate,
     clippy::missing_inline_in_public_items,
     clippy::missing_const_for_fn
@@ -106,6 +106,7 @@ impl<T> Asc<T> {
 }
 
 impl<T: ?Sized> Asc<T> {
+    #[allow(clippy::missing_const_for_fn)] // nightly
     fn strong(&self) -> &AtomicUsize {
         unsafe { &self.inner.as_ref().strong }
     }
@@ -138,7 +139,7 @@ impl<T: ?Sized> Asc<T> {
     #[inline]
     #[must_use]
     pub fn ptr_eq(this: &Self, other: &Self) -> bool {
-        this.inner == other.inner
+        ptr::eq(this.inner.as_ptr(), other.inner.as_ptr())
     }
 
     #[inline]
@@ -147,6 +148,7 @@ impl<T: ?Sized> Asc<T> {
         &mut this.inner.as_mut().data
     }
 
+    #[allow(clippy::missing_const_for_fn)] // nightly
     #[inline]
     #[must_use]
     pub fn as_ptr(this: &Self) -> *const T {
