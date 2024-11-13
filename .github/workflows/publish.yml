@@ -1,0 +1,18 @@
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@just
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: |
+          cargo login ${{ secrets.CRATES_IO_API_TOKEN }}
+          cargo publish --dry-run
+          cargo publish
