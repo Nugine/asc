@@ -10,5 +10,9 @@ documentation = "https://docs.rs/asc"
 keywords = ["arc", "ffi", "sync", "data-structure"]
 categories = ["concurrency", "data-structures"]
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [dependencies]
 serde = { version = "1.0.137", optional = true, default-features = false }
