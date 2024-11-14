@@ -1,5 +1,11 @@
+//! [`Asc`] is a drop-in replacement for
+//! [`Arc`](https://doc.rust-lang.org/nightly/std/sync/struct.Arc.html)
+//! when you don't need weak references.
+
 #![deny(
     clippy::all,
+    clippy::cargo, //
+    clippy::pedantic, //
     clippy::as_conversions,
     clippy::float_arithmetic,
     clippy::arithmetic_side_effects,
@@ -9,8 +15,10 @@
 )]
 #![allow(
     clippy::missing_safety_doc, // TODO
+    clippy::missing_errors_doc, // TODO
+    clippy::wildcard_imports,
+    clippy::enum_glob_use,
 )]
-// ---
 #![no_std]
 
 extern crate alloc;
@@ -132,7 +140,7 @@ impl<T: ?Sized> Asc<T> {
 
     #[inline(never)]
     unsafe fn destroy(&mut self) {
-        drop(box_from_nonnull(self.inner))
+        drop(box_from_nonnull(self.inner));
     }
 
     #[inline]
