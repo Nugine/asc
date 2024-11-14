@@ -1,7 +1,3 @@
-//! [`Asc`] is a drop-in replacement for
-//! [`Arc`](https://doc.rust-lang.org/nightly/std/sync/struct.Arc.html)
-//! when you don't need weak references.
-
 #![deny(
     clippy::all,
     clippy::cargo, //
@@ -19,6 +15,8 @@
     clippy::wildcard_imports,
     clippy::enum_glob_use,
 )]
+//
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![no_std]
 
 extern crate alloc;
@@ -35,6 +33,11 @@ use core::sync::atomic::Ordering::*;
 
 use alloc::boxed::Box;
 
+/// Atomic Strong Count.
+///
+/// [`Asc`] is a drop-in replacement for
+/// [`Arc`](https://doc.rust-lang.org/nightly/std/sync/struct.Arc.html)
+/// when you don't need weak references.
 pub struct Asc<T: ?Sized> {
     inner: NonNull<Inner<T>>,
     _marker: PhantomData<T>,
@@ -224,6 +227,7 @@ mod serde_impl {
 
     use serde::{Deserialize, Serialize};
 
+    #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
     impl<'de, T: Deserialize<'de>> Deserialize<'de> for Asc<T> {
         #[inline]
         fn deserialize<D>(deserializer: D) -> Result<Asc<T>, D::Error>
@@ -234,6 +238,7 @@ mod serde_impl {
         }
     }
 
+    #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
     impl<T: Serialize> Serialize for Asc<T> {
         #[inline]
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
