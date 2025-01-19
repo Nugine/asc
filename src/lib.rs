@@ -166,9 +166,10 @@ impl<T: ?Sized> Asc<T> {
 
     #[inline]
     #[must_use]
-    pub fn into_raw(this: Self) -> *const T {
-        let this = ManuallyDrop::new(this);
-        Self::as_ptr(&*this)
+    pub const fn into_raw(this: Self) -> *const T {
+        let ptr = Self::as_ptr(&this);
+        mem::forget(this);
+        ptr
     }
 }
 
