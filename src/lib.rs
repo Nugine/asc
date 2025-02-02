@@ -154,7 +154,7 @@ impl<T: ?Sized> Asc<T> {
 
     #[inline]
     #[must_use]
-    pub unsafe fn get_mut_unchecked(this: &mut Self) -> &mut T {
+    pub const unsafe fn get_mut_unchecked(this: &mut Self) -> &mut T {
         &mut this.inner.as_mut().data
     }
 
