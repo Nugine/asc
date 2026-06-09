@@ -2,16 +2,20 @@ dev:
     just fmt
     just lint
     just test
+    just test-unstable
     just miri
 
 fmt:
     cargo fmt
 
 lint:
-    cargo clippy --all-features
+    cargo +nightly clippy --all-features -- -D warnings
 
 test:
-    cargo test --all-features
+    cargo test --features std,serde
+
+test-unstable:
+    cargo +nightly test --all-features
 
 miri:
     cargo +nightly miri test --all-features
@@ -21,6 +25,7 @@ doc:
 
 ci:
     cargo fmt --all --check
-    cargo clippy --all-features -- -D warnings
+    just lint
     just test
+    just test-unstable
     just miri
