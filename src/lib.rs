@@ -9,6 +9,8 @@
 //! * No [`Weak`] references — the allocation is freed as soon as the last
 //!   [`Asc`] is dropped.
 //! * No allocator parameter — always uses the global allocator.
+//!   Custom allocators depend on the unstable [`allocator_api`] feature
+//!   and will be considered once it stabilizes.
 //! * [`Asc::from_raw`], [`Asc::as_ptr`], [`Asc::into_raw`], and
 //!   [`Asc::get_mut_unchecked`] are `const` functions.
 //!
@@ -47,6 +49,7 @@
 //! [`RefUnwindSafe`]: std::panic::RefUnwindSafe
 //! [`CoerceUnsized`]: core::ops::CoerceUnsized
 //! [`DispatchFromDyn`]: core::ops::DispatchFromDyn
+//! [`allocator_api`]: https://github.com/rust-lang/rust/issues/32838
 #![deny(
     clippy::all,
     clippy::cargo, //
