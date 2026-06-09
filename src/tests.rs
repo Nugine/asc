@@ -330,3 +330,101 @@ fn zero_sized_type() {
     let val = Asc::try_unwrap(a).unwrap();
     assert_eq!(val, ());
 }
+
+#[test]
+fn get_mut_unchecked_direct() {
+    let mut a = Asc::new(5i32);
+    // Safety: a is the only reference.
+    unsafe {
+        *Asc::get_mut_unchecked(&mut a) = 15;
+    }
+    assert_eq!(*a, 15);
+    assert_eq!(Asc::strong_count(&a), 1);
+}
+
+#[test]
+fn make_mut_zero_sized() {
+    let mut a = Asc::new(());
+    let _b = a.clone();
+    assert_eq!(Asc::strong_count(&a), 2);
+    // make_mut clones into a new allocation since count > 1
+    let _val = Asc::make_mut(&mut a);
+    assert_eq!(Asc::strong_count(&a), 1);
+}
+
+#[test]
+fn try_unwrap_zero_sized_shared() {
+    let a = Asc::new(());
+    let _b = a.clone();
+    let result = Asc::try_unwrap(a);
+    assert!(result.is_err());
+    let a = result.unwrap_err();
+    assert_eq!(*a, ());
+    drop(a);
+}
+
+#[test]
+fn make_mut_preserves_value() {
+    let mut a = Asc::new(String::from("original"));
+    let _b = a.clone();
+    Asc::make_mut(&mut a).push_str(" modified");
+    // _b still has the original value
+    assert_eq!(&*_b, "original");
+    // a has the modified value in a new allocation
+    assert_eq!(&*a, "original modified");
+}
+
+#[cfg(feature = "serde")]
+mod serde_tests {
+    use super::*;
+    use alloc::vec;
+
+    #[test]
+    fn serialize_basic() {
+        let a = Asc::new(42i32);
+        let json = serde_json::to_string(&a).unwrap();
+        assert_eq!(json, "42");
+    }
+
+    #[test]
+    fn deserialize_basic() {
+        let a: Asc<i32> = serde_json::from_str("42").unwrap();
+        assert_eq!(*a, 42);
+    }
+
+    #[test]
+    fn roundtrip_json() {
+        let a = Asc::new(String::from("hello"));
+        let json = serde_json::to_string(&a).unwrap();
+        let b: Asc<String> = serde_json::from_str(&json).unwrap();
+        assert_eq!(*a, *b);
+    }
+
+    #[test]
+    fn serialize_complex() {
+        let a = Asc::new(vec![1, 2, 3]);
+        let json = serde_json::to_string(&a).unwrap();
+        assert_eq!(json, "[1,2,3]");
+    }
+
+    #[test]
+    fn deserialize_complex() {
+        let a: Asc<Vec<i32>> = serde_json::from_str("[4,5,6]").unwrap();
+        assert_eq!(*a, vec![4, 5, 6]);
+    }
+
+    #[test]
+    fn serialize_shared() {
+        let a = Asc::new(10);
+        let _b = a.clone();
+        let json = serde_json::to_string(&a).unwrap();
+        assert_eq!(json, "10");
+    }
+
+    #[test]
+    fn serialize_zero_sized() {
+        let a = Asc::new(());
+        let json = serde_json::to_string(&a).unwrap();
+        assert_eq!(json, "null");
+    }
+}
