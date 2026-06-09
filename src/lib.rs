@@ -96,7 +96,7 @@ use alloc::boxed::Box;
 
 // Bring Arc into scope for rustdoc intra-doc links.
 #[cfg(doc)]
-use std::sync::Arc;
+use alloc::sync::Arc;
 
 #[cfg(feature = "unstable")]
 use core::marker::Unsize;
@@ -686,6 +686,42 @@ mod tests {
 
     #[test]
     fn hash() {
+        use core::hash::{BuildHasher, Hasher};
+
+        #[derive(Default)]
+        struct SimpleHasher(u64);
+
+        impl Hasher for SimpleHasher {
+            fn finish(&self) -> u64 {
+                self.0
+            }
+            fn write(&mut self, bytes: &[u8]) {
+                for &b in bytes {
+                    self.0 = self.0.wrapping_mul(31).wrapping_add(b as u64);
+                }
+            }
+        }
+
+        #[derive(Default)]
+        struct SimpleBuildHasher;
+
+        impl BuildHasher for SimpleBuildHasher {
+            type Hasher = SimpleHasher;
+            fn build_hasher(&self) -> SimpleHasher {
+                SimpleHasher::default()
+            }
+        }
+
+        let bh = SimpleBuildHasher;
+        let a = Asc::new(1);
+        let b = Asc::new(1);
+        let c = Asc::new(2);
+        assert_eq!(bh.hash_one(&a), bh.hash_one(&b));
+        assert_ne!(bh.hash_one(&a), bh.hash_one(&c));
+    }
+
+    #[test]
+    fn ord_as_map_key() {
         let mut map = BTreeMap::new();
         map.insert(Asc::new(1), "one");
         map.insert(Asc::new(2), "two");
