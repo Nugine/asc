@@ -21,6 +21,7 @@
 
 extern crate alloc;
 
+use core::alloc::Layout;
 use core::fmt;
 use core::marker::PhantomData;
 use core::mem;
@@ -28,6 +29,7 @@ use core::mem::ManuallyDrop;
 use core::ops::Deref;
 use core::ptr;
 use core::ptr::NonNull;
+use core::sync::atomic::fence;
 use core::sync::atomic::AtomicUsize;
 use core::sync::atomic::Ordering::*;
 
@@ -95,10 +97,15 @@ impl<T> Asc<T> {
         if s.compare_exchange(1, 0, Relaxed, Relaxed).is_err() {
             return Err(this);
         }
-        let _ = s.load(Acquire);
+        fence(Acquire);
         unsafe {
             let this = ManuallyDrop::new(this);
-            let data = ptr::read(&this.inner.as_ref().data);
+            let data = ptr::read(&raw const this.inner.as_ref().data);
+            // ManuallyDrop prevents Asc::drop from deallocating Inner<T>.
+            // Deallocate the raw memory directly — data was already moved
+            // out via ptr::read, so we must not drop T again.
+            let layout = Layout::new::<Inner<T>>();
+            alloc::alloc::dealloc(this.inner.as_ptr().cast::<u8>(), layout);
             Ok(data)
         }
     }
@@ -197,7 +204,7 @@ impl<T: ?Sized> Drop for Asc<T> {
             return;
         }
 
-        let _ = s.load(Acquire);
+        fence(Acquire);
         unsafe { self.destroy() };
     }
 }
