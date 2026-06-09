@@ -9,7 +9,7 @@ fmt:
     cargo fmt
 
 lint:
-    cargo clippy --all-features
+    cargo +nightly clippy --all-features -- -D warnings
 
 test:
     cargo test --features std,serde
@@ -25,7 +25,7 @@ doc:
 
 ci:
     cargo fmt --all --check
-    cargo clippy --all-features -- -D warnings
+    just lint
     just test
     just test-unstable
     just miri

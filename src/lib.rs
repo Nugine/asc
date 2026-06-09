@@ -170,8 +170,8 @@ impl<T> Asc<T> {
     #[inline]
     #[must_use]
     pub fn pin(data: T) -> Pin<Asc<T>> {
-        // Safety: Asc::new always allocates and pins the data on the heap,
-        // so the data's address is stable.
+        // Safety: Asc::new allocates the data on the heap, so its address
+        // is stable for the lifetime of the allocation.
         unsafe { Pin::new_unchecked(Asc::new(data)) }
     }
 
