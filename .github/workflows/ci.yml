@@ -38,3 +38,17 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
       - run: just test
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - run: |
+          cargo llvm-cov --all-features --codecov --output-path target/codecov.json
+      - uses: codecov/codecov-action@v5
+        with:
+          files: target/codecov.json
+          fail_ci_if_error: true
