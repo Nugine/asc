@@ -148,6 +148,7 @@ fn box_into_nonnull<T>(b: Box<T>) -> NonNull<T> {
     unsafe { NonNull::new_unchecked(Box::into_raw(b)) }
 }
 
+#[cfg(not(target_pointer_width = "64"))]
 #[allow(dead_code)]
 #[cold]
 fn critical() -> ! {
@@ -162,6 +163,18 @@ fn critical() -> ! {
     let _bomb = Bomb {};
     panic!("critical failure")
 }
+
+#[cfg(not(target_pointer_width = "64"))]
+#[inline(always)]
+fn check_overflow(old: usize) {
+    if old >= isize::MAX as usize {
+        critical()
+    }
+}
+
+#[cfg(target_pointer_width = "64")]
+#[inline(always)]
+const fn check_overflow(_old: usize) {}
 
 impl<T> Asc<T> {
     /// Constructs a new `Pin<Asc<T>>`.
@@ -256,9 +269,7 @@ impl<T: ?Sized> Asc<T> {
     fn shallow_clone(&self) -> Self {
         let s = self.strong();
         let old = s.fetch_add(1, Relaxed);
-        if cfg!(not(target_pointer_width = "64")) && old >= isize::MAX as usize {
-            critical()
-        }
+        check_overflow(old);
 
         Self {
             inner: self.inner,
