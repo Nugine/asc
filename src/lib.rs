@@ -73,7 +73,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(
     feature = "unstable",
-    feature(unsize, dispatch_from_dyn, coerce_unsized)
+    feature(unsize, dispatch_from_dyn, coerce_unsized, ptr_metadata)
 )]
 #![no_std]
 
@@ -89,6 +89,7 @@ use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
 use core::mem;
 use core::mem::ManuallyDrop;
+use core::mem::MaybeUninit;
 use core::ops::Deref;
 use core::pin::Pin;
 use core::ptr;
@@ -318,6 +319,157 @@ impl<T> Asc<T> {
             drop(box_from_nonnull(NonNull::new_unchecked(inner)));
         }
     }
+
+    /// Constructs a new `Asc<MaybeUninit<T>>` with uninitialized contents.
+    ///
+    /// See [`Arc::new_uninit`].
+    #[inline]
+    #[must_use]
+    pub fn new_uninit() -> Asc<MaybeUninit<T>> {
+        let layout = Layout::new::<Inner<MaybeUninit<T>>>();
+        let ptr = unsafe { alloc::alloc::alloc(layout) };
+        if ptr.is_null() {
+            alloc::alloc::handle_alloc_error(layout);
+        }
+        let ptr = ptr.cast::<Inner<MaybeUninit<T>>>();
+        // Initialize the strong count; data remains uninitialized.
+        unsafe {
+            ptr::addr_of_mut!((*ptr).strong).write(AtomicUsize::new(1));
+        }
+        Asc {
+            inner: unsafe { NonNull::new_unchecked(ptr) },
+            _marker: PhantomData,
+        }
+    }
+
+    /// Constructs a new `Asc<MaybeUninit<T>>` with zeroed contents.
+    ///
+    /// See [`Arc::new_zeroed`].
+    #[inline]
+    #[must_use]
+    pub fn new_zeroed() -> Asc<MaybeUninit<T>> {
+        let layout = Layout::new::<Inner<MaybeUninit<T>>>();
+        let ptr = unsafe { alloc::alloc::alloc_zeroed(layout) };
+        if ptr.is_null() {
+            alloc::alloc::handle_alloc_error(layout);
+        }
+        let ptr = ptr.cast::<Inner<MaybeUninit<T>>>();
+        // alloc_zeroed already zeroed the strong field; reset to 1.
+        unsafe {
+            ptr::addr_of_mut!((*ptr).strong).write(AtomicUsize::new(1));
+        }
+        Asc {
+            inner: unsafe { NonNull::new_unchecked(ptr) },
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<T> Asc<MaybeUninit<T>> {
+    /// Converts an `Asc<MaybeUninit<T>>` to `Asc<T>`.
+    ///
+    /// # Safety
+    ///
+    /// The contents must be fully initialized. Calling this when the
+    /// contents are not fully initialized causes immediate undefined
+    /// behavior.
+    ///
+    /// See [`Arc::assume_init`].
+    #[inline]
+    #[must_use]
+    pub unsafe fn assume_init(self) -> Asc<T> {
+        // MaybeUninit<T> is #[repr(transparent)] over T, so
+        // Inner<MaybeUninit<T>> has the same layout as Inner<T>.
+        let this = ManuallyDrop::new(self);
+        Asc {
+            inner: this.inner.cast::<Inner<T>>(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+#[cfg(feature = "unstable")]
+impl<T> Asc<[MaybeUninit<T>]> {
+    /// Converts an `Asc<[MaybeUninit<T>]>` to `Asc<[T]>`.
+    ///
+    /// # Safety
+    ///
+    /// Every element of the slice must be fully initialized.
+    ///
+    /// See [`Arc::assume_init`].
+    #[inline]
+    #[must_use]
+    pub unsafe fn assume_init(self) -> Asc<[T]> {
+        let this = ManuallyDrop::new(self);
+        let ptr = this.inner.as_ptr();
+        let len = ptr::metadata(ptr);
+        let inner = ptr::from_raw_parts_mut::<Inner<[T]>>(ptr.cast::<u8>().cast::<()>(), len);
+        Asc {
+            inner: unsafe { NonNull::new_unchecked(inner) },
+            _marker: PhantomData,
+        }
+    }
+}
+
+#[cfg(feature = "unstable")]
+impl<T> Asc<[T]> {
+    /// Constructs a new `Asc<[MaybeUninit<T>]>` with `len` uninitialized
+    /// elements.
+    ///
+    /// See [`Arc::new_uninit_slice`].
+    #[inline]
+    #[must_use]
+    pub fn new_uninit_slice(len: usize) -> Asc<[MaybeUninit<T>]> {
+        let (layout, data_offset) = inner_slice_layout::<T>(len);
+        let ptr = unsafe { alloc::alloc::alloc(layout) };
+        if ptr.is_null() {
+            alloc::alloc::handle_alloc_error(layout);
+        }
+        let inner = ptr_to_inner_slice::<MaybeUninit<T>>(ptr, data_offset, len);
+        unsafe {
+            ptr::addr_of_mut!((*inner).strong).write(AtomicUsize::new(1));
+        }
+        Asc {
+            inner: unsafe { NonNull::new_unchecked(inner) },
+            _marker: PhantomData,
+        }
+    }
+
+    /// Constructs a new `Asc<[MaybeUninit<T>]>` with `len` zeroed elements.
+    ///
+    /// See [`Arc::new_zeroed_slice`].
+    #[inline]
+    #[must_use]
+    pub fn new_zeroed_slice(len: usize) -> Asc<[MaybeUninit<T>]> {
+        let (layout, data_offset) = inner_slice_layout::<T>(len);
+        let ptr = unsafe { alloc::alloc::alloc_zeroed(layout) };
+        if ptr.is_null() {
+            alloc::alloc::handle_alloc_error(layout);
+        }
+        let inner = ptr_to_inner_slice::<MaybeUninit<T>>(ptr, data_offset, len);
+        unsafe {
+            ptr::addr_of_mut!((*inner).strong).write(AtomicUsize::new(1));
+        }
+        Asc {
+            inner: unsafe { NonNull::new_unchecked(inner) },
+            _marker: PhantomData,
+        }
+    }
+}
+
+#[cfg(feature = "unstable")]
+fn inner_slice_layout<T>(len: usize) -> (Layout, usize) {
+    let strong = Layout::new::<AtomicUsize>();
+    let data = Layout::array::<T>(len).expect("capacity overflow");
+    strong.extend(data).unwrap()
+}
+
+#[cfg(feature = "unstable")]
+const fn ptr_to_inner_slice<T>(base: *mut u8, data_offset: usize, len: usize) -> *mut Inner<[T]> {
+    // Inner<[T]> is #[repr(C)] with a DST tail [T].
+    // Its fat-pointer metadata is the slice length.
+    let _ = data_offset; // reserved for future alignment validation
+    ptr::from_raw_parts_mut::<Inner<[T]>>(base.cast::<()>(), len)
 }
 
 impl<T: ?Sized> Asc<T> {
