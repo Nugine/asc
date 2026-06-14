@@ -229,7 +229,8 @@ impl<T> Asc<T> {
         if s.compare_exchange(1, 0, Acquire, Relaxed).is_err() {
             return Err(this);
         }
-        fence(Acquire);
+        // Acquire ordering on successful CAS already provides the
+        // necessary acquire semantics for reading the data below.
         unsafe {
             let this = ManuallyDrop::new(this);
             let data = ptr::read(&raw const this.inner.as_ref().data);
