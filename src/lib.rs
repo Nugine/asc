@@ -61,12 +61,7 @@
     clippy::missing_inline_in_public_items,
     clippy::missing_const_for_fn
 )]
-#![allow(
-    clippy::missing_safety_doc, // TODO
-    clippy::missing_errors_doc, // TODO
-    clippy::wildcard_imports,
-    clippy::enum_glob_use,
-)]
+#![allow(clippy::wildcard_imports, clippy::enum_glob_use)]
 //
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(
@@ -119,7 +114,14 @@ pub struct Asc<T: ?Sized> {
     _marker: PhantomData<T>,
 }
 
+// Safety: Asc<T> provides the same shared-ownership semantics as Arc<T>.
+// When T: Send + Sync, sharing T through Asc across thread boundaries is
+// sound because all accesses go through the same atomic reference-counting
+// and borrow-checking discipline as std's Arc.
 unsafe impl<T: Send + Sync> Send for Asc<T> {}
+
+// Safety: Asc<T> provides the same shared-ownership semantics as Arc<T>.
+// &Asc<T> gives access to &T via Deref, so if &T: Sync then &Asc<T>: Sync.
 unsafe impl<T: Send + Sync> Sync for Asc<T> {}
 
 #[cfg(feature = "std")]
@@ -207,6 +209,11 @@ impl<T> Asc<T> {
     /// Returns the inner value if the `Asc` has exactly one strong reference.
     ///
     /// See [`Arc::try_unwrap`].
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(self)` if there are other strong references to the
+    /// same allocation.
     #[inline]
     pub fn try_unwrap(this: Self) -> Result<T, Self> {
         let s = this.strong();
