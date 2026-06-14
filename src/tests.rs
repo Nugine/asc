@@ -513,7 +513,10 @@ mod dst_tests {
         assert_ne!(a, c);
     }
 
+    // miri: into_raw without from_raw leaks the allocation (from_raw
+    // is Sized-only, so DST reconstruction is not possible).
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn slice_as_ptr_into_raw() {
         let a: Asc<[i32]> = Asc::new([7, 8, 9]);
         let ptr = Asc::as_ptr(&a);
