@@ -7,18 +7,17 @@
 //! # Key differences from [`Arc`]
 //!
 //! * No [`Weak`] references — the allocation is freed as soon as the last
-//!   [`Asc`] is dropped.
-//! * No allocator parameter — always uses the global allocator.
-//!   Custom allocators depend on the unstable [`allocator_api`] feature
-//!   and will be considered once it stabilizes.
-//! * [`Asc::from_raw`], [`Asc::as_ptr`], [`Asc::into_raw`], and
-//!   [`Asc::get_mut_unchecked`] are `const` functions.
+//!   [`Asc`] is dropped. This also means [`Asc`] cannot safely express
+//!   reference cycles.
+//! * Custom allocators are not yet supported — [`Asc`] always uses the
+//!   global allocator. This is blocked on the unstable
+//!   [`allocator_api`] feature and will be reconsidered once it stabilizes.
 //!
 //! # Cycle Warning
 //!
-//! `Asc` does **not** have weak references. Any reference cycle (e.g.,
+//! [`Asc`] does **not** have weak references. Any reference cycle (e.g.,
 //! `A → B → A`) will cause a memory leak because the strong count never
-//! reaches zero. `Asc` is suitable for DAGs and tree structures; for
+//! reaches zero. [`Asc`] is suitable for DAGs and tree structures; for
 //! general graphs with back-references, use [`std::sync::Arc`] with
 //! [`Weak`].
 //!
