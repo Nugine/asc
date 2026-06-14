@@ -151,8 +151,8 @@ fn increment_decrement_strong_count() {
 // miri: increment_strong_count uses from_raw internally, same SB limitation.
 #[test]
 #[cfg_attr(miri, ignore)]
-fn increment_strong_count_miri() {
-    // Same as above but structured for miri compatibility
+fn increment_strong_count_via_as_ptr() {
+    // Uses as_ptr (not into_raw) so the Asc stays alive during the test.
     let a = Asc::new(7u32);
     let ptr = Asc::as_ptr(&a);
     unsafe { Asc::increment_strong_count(ptr) };
