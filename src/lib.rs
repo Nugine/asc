@@ -184,10 +184,10 @@ impl<T> Asc<T> {
     /// See [`Arc::pin`].
     #[inline]
     #[must_use]
-    pub fn pin(data: T) -> Pin<Asc<T>> {
+    pub fn pin(data: T) -> Pin<Self> {
         // Safety: Asc::new allocates the data on the heap, so its address
         // is stable for the lifetime of the allocation.
-        unsafe { Pin::new_unchecked(Asc::new(data)) }
+        unsafe { Pin::new_unchecked(Self::new(data)) }
     }
 
     /// Constructs a new `Asc<T>`.
@@ -411,7 +411,7 @@ impl<T: Clone> Asc<T> {
         let s = this.strong();
         let count = s.load(Acquire);
         if count > 1 {
-            *this = Asc::new(T::clone(&**this));
+            *this = Self::new(T::clone(&**this));
         }
         unsafe { &mut this.inner.as_mut().data }
     }
@@ -434,7 +434,7 @@ impl<T: ?Sized + fmt::Display> fmt::Display for Asc<T> {
 impl<T: ?Sized> fmt::Pointer for Asc<T> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Pointer::fmt(&Asc::as_ptr(self), f)
+        fmt::Pointer::fmt(&Self::as_ptr(self), f)
     }
 }
 
@@ -471,14 +471,14 @@ impl<T: ?Sized + Ord> Ord for Asc<T> {
 impl<T> From<T> for Asc<T> {
     #[inline]
     fn from(value: T) -> Self {
-        Asc::new(value)
+        Self::new(value)
     }
 }
 
 impl<T: Default> Default for Asc<T> {
     #[inline]
     fn default() -> Self {
-        Asc::new(T::default())
+        Self::new(T::default())
     }
 }
 
@@ -491,11 +491,11 @@ mod serde_impl {
     #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
     impl<'de, T: Deserialize<'de>> Deserialize<'de> for Asc<T> {
         #[inline]
-        fn deserialize<D>(deserializer: D) -> Result<Asc<T>, D::Error>
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where
             D: ::serde::de::Deserializer<'de>,
         {
-            T::deserialize(deserializer).map(Asc::new)
+            T::deserialize(deserializer).map(Self::new)
         }
     }
 
