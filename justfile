@@ -10,6 +10,9 @@ fmt:
 
 lint:
     cargo +nightly clippy --all-features --all-targets -- -D warnings
+    cargo check --no-default-features
+    cargo check --features std
+    cargo check --features std,serde
 
 test:
     cargo test --features std,serde
