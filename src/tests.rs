@@ -163,6 +163,17 @@ fn increment_strong_count_miri() {
 }
 
 #[test]
+fn is_unique_basic() {
+    let a = Asc::new(1);
+    assert!(Asc::is_unique(&a));
+    let b = a.clone();
+    assert!(!Asc::is_unique(&a));
+    assert!(!Asc::is_unique(&b));
+    drop(b);
+    assert!(Asc::is_unique(&a));
+}
+
+#[test]
 fn get_mut_unique() {
     let mut a = Asc::new(10i32);
     {

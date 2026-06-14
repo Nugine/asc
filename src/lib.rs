@@ -360,6 +360,18 @@ impl<T: ?Sized> Asc<T> {
         ptr::eq(this.inner.as_ptr(), other.inner.as_ptr())
     }
 
+    /// Returns `true` if this `Asc` has exactly one strong reference.
+    ///
+    /// This is equivalent to `Asc::strong_count(this) == 1`, but may be
+    /// more efficient on some platforms.
+    ///
+    /// See [`Arc::is_unique`].
+    #[inline]
+    #[must_use]
+    pub fn is_unique(this: &Self) -> bool {
+        this.strong().load(Relaxed) == 1
+    }
+
     /// Returns a mutable reference to the inner value if no other `Asc`s
     /// point to the same allocation.
     ///
