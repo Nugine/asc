@@ -12,6 +12,6 @@
 
 Atomic Strong Count. 
 
-`Asc` is a drop-in replacement for `Arc` when you don't need weak references.
+`Asc` is a lighter alternative to `Arc` for use cases that don't need weak references.
 
 Documentation: <https://docs.rs/asc>

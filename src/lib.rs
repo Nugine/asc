@@ -115,9 +115,9 @@ use std::panic::{RefUnwindSafe, UnwindSafe};
 
 /// Atomic Strong Count.
 ///
-/// [`Asc`] is a drop-in replacement for
+/// [`Asc`] is a lighter alternative to
 /// [`Arc`](https://doc.rust-lang.org/nightly/std/sync/struct.Arc.html)
-/// when you don't need weak references.
+/// for use cases that don't need weak references.
 pub struct Asc<T: ?Sized> {
     inner: NonNull<Inner<T>>,
     _marker: PhantomData<T>,
