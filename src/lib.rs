@@ -263,6 +263,48 @@ impl<T> Asc<T> {
             _marker: PhantomData,
         }
     }
+
+    /// Increments the strong reference count on the `Asc<T>` associated
+    /// with the provided pointer.
+    ///
+    /// # Safety
+    ///
+    /// The pointer must have been returned by [`Asc::into_raw`], and it
+    /// must not have been passed to [`Asc::decrement_strong_count`] more
+    /// times than it has been passed to this function.
+    ///
+    /// See [`Arc::increment_strong_count`].
+    #[inline]
+    #[allow(clippy::missing_const_for_fn)]
+    pub unsafe fn increment_strong_count(ptr: *const T) {
+        // Safety: from_raw reconstructs the Asc without touching the count.
+        // We clone it (incrementing the count), then wrap both in
+        // ManuallyDrop so their destructors don't decrement when they
+        // go out of scope. This nets a +1 to the strong count.
+        unsafe {
+            let this = mem::ManuallyDrop::new(Self::from_raw(ptr));
+            let _clone = mem::ManuallyDrop::new(this.clone());
+        }
+    }
+
+    /// Decrements the strong reference count on the `Asc<T>` associated
+    /// with the provided pointer. If the count reaches zero, the
+    /// allocation is freed.
+    ///
+    /// # Safety
+    ///
+    /// The pointer must have been returned by [`Asc::into_raw`], and it
+    /// must not have been passed to this function more than once since
+    /// the last call to [`Asc::increment_strong_count`].
+    ///
+    /// See [`Arc::decrement_strong_count`].
+    #[inline]
+    #[allow(clippy::missing_const_for_fn)]
+    pub unsafe fn decrement_strong_count(ptr: *const T) {
+        // Safety: from_raw reconstructs the Asc, and dropping it
+        // decrements the counter (and frees if last).
+        unsafe { drop(Self::from_raw(ptr)) };
+    }
 }
 
 impl<T: ?Sized> Asc<T> {

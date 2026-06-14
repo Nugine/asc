@@ -123,6 +123,45 @@ fn from_raw_high_alignment() {
     assert_eq!(a.0, 42);
 }
 
+// miri: see comment on into_raw_from_raw_roundtrip.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn increment_decrement_strong_count() {
+    let a = Asc::new(42i32);
+    let ptr = Asc::into_raw(a);
+
+    // Increment: now there are 2 logical references
+    unsafe { Asc::increment_strong_count(ptr) };
+
+    // Reconstruct: should have count 2
+    let a = unsafe { Asc::from_raw(ptr) };
+    assert_eq!(Asc::strong_count(&a), 2);
+    assert_eq!(*a, 42);
+
+    // Decrement one reference
+    unsafe { Asc::decrement_strong_count(Asc::as_ptr(&a)) };
+    assert_eq!(Asc::strong_count(&a), 1);
+
+    // Decrement the last reference: allocation freed
+    let ptr = Asc::into_raw(a);
+    unsafe { Asc::decrement_strong_count(ptr) };
+    // If we reach here without double-free, the test passes
+}
+
+// miri: increment_strong_count uses from_raw internally, same SB limitation.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn increment_strong_count_miri() {
+    // Same as above but structured for miri compatibility
+    let a = Asc::new(7u32);
+    let ptr = Asc::as_ptr(&a);
+    unsafe { Asc::increment_strong_count(ptr) };
+    assert_eq!(Asc::strong_count(&a), 2);
+    // Clean up the extra reference without deallocating
+    unsafe { Asc::decrement_strong_count(ptr) };
+    assert_eq!(Asc::strong_count(&a), 1);
+}
+
 #[test]
 fn get_mut_unique() {
     let mut a = Asc::new(10i32);
