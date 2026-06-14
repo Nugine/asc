@@ -1,6 +1,6 @@
 //! Atomic Strong Count.
 //!
-//! [`Asc`] is a lighter alternative to [`std::sync::Arc`] for use cases
+//! [`Asc`] is a lighter alternative to [`Arc`] for use cases
 //! that don't need weak references. It provides shared, thread-safe
 //! ownership of heap-allocated data.
 //!
@@ -18,11 +18,10 @@
 //! [`Asc`] does **not** have weak references. Any reference cycle (e.g.,
 //! `A → B → A`) will cause a memory leak because the strong count never
 //! reaches zero. [`Asc`] is suitable for DAGs and tree structures; for
-//! general graphs with back-references, use [`std::sync::Arc`] with
+//! general graphs with back-references, use [`Arc`] with
 //! [`Weak`].
 //!
 //! [`Weak`]: std::sync::Weak
-//! [`std::sync::Arc`]: https://doc.rust-lang.org/std/sync/struct.Arc.html
 //!
 //! # Optional features
 //!
@@ -115,9 +114,8 @@ use std::panic::{RefUnwindSafe, UnwindSafe};
 
 /// Atomic Strong Count.
 ///
-/// [`Asc`] is a lighter alternative to
-/// [`Arc`](https://doc.rust-lang.org/nightly/std/sync/struct.Arc.html)
-/// for use cases that don't need weak references.
+/// [`Asc`] is a lighter alternative to [`Arc`] for use cases that don't
+/// need weak references.
 pub struct Asc<T: ?Sized> {
     inner: NonNull<Inner<T>>,
     _marker: PhantomData<T>,
