@@ -14,6 +14,17 @@
 //! * [`Asc::from_raw`], [`Asc::as_ptr`], [`Asc::into_raw`], and
 //!   [`Asc::get_mut_unchecked`] are `const` functions.
 //!
+//! # Cycle Warning
+//!
+//! `Asc` does **not** have weak references. Any reference cycle (e.g.,
+//! `A → B → A`) will cause a memory leak because the strong count never
+//! reaches zero. `Asc` is suitable for DAGs and tree structures; for
+//! general graphs with back-references, use [`std::sync::Arc`] with
+//! [`Weak`].
+//!
+//! [`Weak`]: std::sync::Weak
+//! [`std::sync::Arc`]: https://doc.rust-lang.org/std/sync/struct.Arc.html
+//!
 //! # Optional features
 //!
 //! * **`serde`** — Enables [`serde`] serialization and deserialization.
