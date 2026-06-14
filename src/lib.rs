@@ -360,8 +360,10 @@ impl<T: ?Sized> Asc<T> {
 
     /// Returns `true` if this `Asc` has exactly one strong reference.
     ///
-    /// This is equivalent to `Asc::strong_count(this) == 1`, but may be
-    /// more efficient on some platforms.
+    /// This is a snapshot — the result may be stale by the time the
+    /// caller reads it, because [`Relaxed`] ordering does not
+    /// synchronize with other threads. For safety decisions use
+    /// [`Asc::get_mut`] which employs [`Acquire`] ordering.
     ///
     /// See [`Arc::is_unique`].
     #[inline]
