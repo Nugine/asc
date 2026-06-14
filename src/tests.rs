@@ -489,6 +489,7 @@ mod dst_tests {
     use alloc::format;
     use alloc::string::String;
     use core::fmt::Debug;
+    use core::mem::MaybeUninit;
 
     #[test]
     fn slice_deref_clone_drop() {
@@ -550,6 +551,51 @@ mod dst_tests {
         let expected = format!("{:p}", Asc::as_ptr(&a));
         assert_eq!(s, expected);
     }
+
+    // miri: from_raw_parts_mut for Inner<[MaybeUninit<T>]> fat pointer
+    // construction is subject to the same Stacked Borrows limitation.
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn new_uninit_slice_assume_init() {
+        let mut uninit: Asc<[MaybeUninit<i32>]> = Asc::new_uninit_slice(3);
+        assert_eq!(Asc::strong_count(&uninit), 1);
+
+        // Initialize via get_mut
+        let mu = Asc::get_mut(&mut uninit).unwrap();
+        mu[0].write(10);
+        mu[1].write(20);
+        mu[2].write(30);
+
+        let init: Asc<[i32]> = unsafe { uninit.assume_init() };
+        assert_eq!(&*init, &[10, 20, 30]);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn new_zeroed_slice_assume_init() {
+        let zeroed: Asc<[MaybeUninit<u64>]> = Asc::new_zeroed_slice(4);
+        let init: Asc<[u64]> = unsafe { zeroed.assume_init() };
+        assert_eq!(&*init, &[0u64, 0, 0, 0]);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn new_uninit_slice_zst() {
+        let mut uninit: Asc<[MaybeUninit<()>]> = Asc::new_uninit_slice(5);
+        Asc::get_mut(&mut uninit).unwrap()[2].write(());
+        let init: Asc<[()]> = unsafe { uninit.assume_init() };
+        assert_eq!(init.len(), 5);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn new_uninit_slice_zero_len() {
+        let uninit: Asc<[MaybeUninit<i32>]> = Asc::new_uninit_slice(0);
+        assert_eq!(Asc::strong_count(&uninit), 1);
+        // Zero-length slices are valid: only the header (strong field)
+        // is allocated, no data elements.
+        drop(uninit);
+    }
 }
 
 #[cfg(feature = "std")]
@@ -598,4 +644,44 @@ mod thread_tests {
         assert_eq!(Asc::strong_count(&a), 1);
         // If concurrent clone/drop had a race, we'd see wrong count or UB
     }
+}
+
+#[test]
+fn new_uninit_assume_init() {
+    let mut five = Asc::<i32>::new_uninit();
+    Asc::get_mut(&mut five).unwrap().write(5);
+    let five = unsafe { five.assume_init() };
+    assert_eq!(*five, 5);
+}
+
+#[test]
+fn new_zeroed_assume_init() {
+    let zeroed = Asc::<u64>::new_zeroed();
+    let zeroed = unsafe { zeroed.assume_init() };
+    assert_eq!(*zeroed, 0u64);
+}
+
+#[test]
+fn new_uninit_zst() {
+    let mut zst = Asc::<()>::new_uninit();
+    Asc::get_mut(&mut zst).unwrap().write(());
+    let zst = unsafe { zst.assume_init() };
+    assert_eq!(*zst, ());
+}
+
+#[test]
+fn new_zeroed_drop_behavior() {
+    let a = Asc::<i32>::new_zeroed();
+    let b = a.clone();
+    assert_eq!(Asc::strong_count(&a), 2);
+    drop(b);
+    assert_eq!(Asc::strong_count(&a), 1);
+}
+
+#[test]
+fn new_uninit_drop_without_init() {
+    // Dropping an uninitialized MaybeUninit<i32> is safe because
+    // MaybeUninit does not run Drop on the inner value.
+    let _a = Asc::<i32>::new_uninit();
+    let _b = Asc::<String>::new_uninit();
 }
