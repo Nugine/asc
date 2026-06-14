@@ -123,7 +123,9 @@ fn from_raw_high_alignment() {
     assert_eq!(a.0, 42);
 }
 
-// miri: see comment on into_raw_from_raw_roundtrip.
+// miri: into_raw invalidates the original reference tag; creating
+// &(*inner).strong from the raw pointer hits the Stacked Borrows
+// limitation (same as into_raw_from_raw_roundtrip).
 #[test]
 #[cfg_attr(miri, ignore)]
 fn increment_decrement_strong_count() {
@@ -148,7 +150,8 @@ fn increment_decrement_strong_count() {
     // If we reach here without double-free, the test passes
 }
 
-// miri: increment_strong_count uses from_raw internally, same SB limitation.
+// miri: &(*inner).strong retags through a pointer derived from
+// as_ptr (same Stacked Borrows limitation as from_raw roundtrip).
 #[test]
 #[cfg_attr(miri, ignore)]
 fn increment_strong_count_via_as_ptr() {
