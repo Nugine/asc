@@ -543,3 +543,51 @@ mod dst_tests {
         assert_eq!(s, expected);
     }
 }
+
+#[cfg(feature = "std")]
+mod thread_tests {
+    use super::*;
+    use alloc::vec::Vec;
+    use std::thread;
+
+    #[test]
+    fn send_to_another_thread() {
+        let a = Asc::new(42i32);
+        let handle = thread::spawn(move || {
+            assert_eq!(*a, 42);
+            Asc::strong_count(&a)
+        });
+        let count = handle.join().unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn clone_across_threads() {
+        let a = Asc::new(0i32);
+        let b = a.clone();
+        let handle = thread::spawn(move || {
+            assert_eq!(*b, 0);
+        });
+        handle.join().unwrap();
+        assert_eq!(*a, 0);
+        assert_eq!(Asc::strong_count(&a), 1);
+    }
+
+    #[test]
+    fn concurrent_clone_drop() {
+        let a = Asc::new(());
+        let n = 8;
+        let mut handles = Vec::new();
+        for _ in 0..n {
+            let a = a.clone();
+            handles.push(thread::spawn(move || {
+                let _a = a;
+            }));
+        }
+        for h in handles {
+            h.join().unwrap();
+        }
+        assert_eq!(Asc::strong_count(&a), 1);
+        // If concurrent clone/drop had a race, we'd see wrong count or UB
+    }
+}
