@@ -1,8 +1,8 @@
 //! Atomic Strong Count.
 //!
-//! [`Asc`] is a drop-in replacement for [`std::sync::Arc`] when you don't
-//! need weak references. It provides shared, thread-safe ownership of
-//! heap-allocated data.
+//! [`Asc`] is a lighter alternative to [`std::sync::Arc`] for use cases
+//! that don't need weak references. It provides shared, thread-safe
+//! ownership of heap-allocated data.
 //!
 //! # Key differences from [`Arc`]
 //!
@@ -54,7 +54,6 @@
 //! assert_eq!(value, 42);
 //! ```
 //!
-//! [`Weak`]: std::sync::Weak
 //! [`UnwindSafe`]: std::panic::UnwindSafe
 //! [`RefUnwindSafe`]: std::panic::RefUnwindSafe
 //! [`CoerceUnsized`]: core::ops::CoerceUnsized
