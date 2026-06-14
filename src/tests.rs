@@ -254,7 +254,7 @@ fn hash() {
         }
         fn write(&mut self, bytes: &[u8]) {
             for &b in bytes {
-                self.0 = self.0.wrapping_mul(31).wrapping_add(b as u64);
+                self.0 = self.0.wrapping_mul(31).wrapping_add(u64::from(b));
             }
         }
     }
@@ -317,7 +317,7 @@ fn from_trait() {
 
 #[test]
 fn default_trait() {
-    let a: Asc<i32> = Default::default();
+    let a: Asc<i32> = Asc::default();
     assert_eq!(*a, 0);
 }
 
@@ -377,8 +377,7 @@ fn zero_sized_type() {
     assert_eq!(Asc::strong_count(&a), 2);
     assert!(Asc::ptr_eq(&a, &b));
     drop(b);
-    let val = Asc::try_unwrap(a).unwrap();
-    assert_eq!(val, ());
+    Asc::try_unwrap(a).unwrap();
 }
 
 #[test]
@@ -416,10 +415,10 @@ fn try_unwrap_zero_sized_shared() {
 #[test]
 fn make_mut_preserves_value() {
     let mut a = Asc::new(String::from("original"));
-    let _b = a.clone();
+    let b = a.clone();
     Asc::make_mut(&mut a).push_str(" modified");
-    // _b still has the original value
-    assert_eq!(&*_b, "original");
+    // b still has the original value
+    assert_eq!(&*b, "original");
     // a has the modified value in a new allocation
     assert_eq!(&*a, "original modified");
 }
