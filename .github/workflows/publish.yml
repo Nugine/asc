@@ -7,10 +7,15 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: taiki-e/install-action@just
       - uses: dtolnay/rust-toolchain@nightly
-      - run: cargo login ${{ secrets.CRATES_IO_API_TOKEN }}
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
       - run: cargo publish --dry-run
       - run: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
