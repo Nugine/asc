@@ -1,4 +1,4 @@
-use super::*;
+use super::Asc;
 
 use alloc::collections::BTreeMap;
 use alloc::format;
@@ -425,8 +425,10 @@ fn make_mut_preserves_value() {
 
 #[cfg(feature = "serde")]
 mod serde_tests {
-    use super::*;
+    use super::Asc;
+    use alloc::string::String;
     use alloc::vec;
+    use alloc::vec::Vec;
 
     #[test]
     fn serialize_basic() {
@@ -480,7 +482,7 @@ mod serde_tests {
 
 #[cfg(feature = "unstable")]
 mod dst_tests {
-    use super::*;
+    use super::Asc;
     use alloc::format;
     use alloc::string::String;
     use core::fmt::Debug;
@@ -549,7 +551,7 @@ mod dst_tests {
 
 #[cfg(feature = "std")]
 mod thread_tests {
-    use super::*;
+    use super::Asc;
     use alloc::vec::Vec;
     use std::thread;
 

@@ -69,7 +69,6 @@
     clippy::missing_inline_in_public_items,
     clippy::missing_const_for_fn
 )]
-#![allow(clippy::wildcard_imports, clippy::enum_glob_use)]
 //
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(
@@ -96,7 +95,7 @@ use core::ptr;
 use core::ptr::NonNull;
 use core::sync::atomic::fence;
 use core::sync::atomic::AtomicUsize;
-use core::sync::atomic::Ordering::*;
+use core::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 
 use alloc::boxed::Box;
 
@@ -548,7 +547,7 @@ impl<T: Default> Default for Asc<T> {
 
 #[cfg(feature = "serde")]
 mod serde_impl {
-    use super::*;
+    use super::Asc;
 
     use serde::{Deserialize, Serialize};
 
