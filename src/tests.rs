@@ -477,3 +477,69 @@ mod serde_tests {
         assert_eq!(json, "null");
     }
 }
+
+#[cfg(feature = "unstable")]
+mod dst_tests {
+    use super::*;
+    use alloc::format;
+    use alloc::string::String;
+    use core::fmt::Debug;
+
+    #[test]
+    fn slice_deref_clone_drop() {
+        let a: Asc<[i32]> = Asc::new([1, 2, 3]);
+        assert_eq!(&*a, &[1, 2, 3]);
+
+        let b = a.clone();
+        assert_eq!(Asc::strong_count(&a), 2);
+        assert!(Asc::ptr_eq(&a, &b));
+
+        drop(b);
+        assert_eq!(Asc::strong_count(&a), 1);
+    }
+
+    #[test]
+    fn slice_debug() {
+        let a: Asc<[i32]> = Asc::new([10, 20]);
+        assert_eq!(format!("{a:?}"), "[10, 20]");
+    }
+
+    #[test]
+    fn slice_partial_eq() {
+        let a: Asc<[i32]> = Asc::new([1, 2]);
+        let b: Asc<[i32]> = Asc::new([1, 2]);
+        let c: Asc<[i32]> = Asc::new([3, 4]);
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+    }
+
+    #[test]
+    fn slice_as_ptr_into_raw() {
+        let a: Asc<[i32]> = Asc::new([7, 8, 9]);
+        let ptr = Asc::as_ptr(&a);
+        assert_eq!(unsafe { &*ptr }, &[7, 8, 9]);
+
+        let ptr2 = Asc::into_raw(a);
+        assert_eq!(unsafe { &*ptr2 }, &[7, 8, 9]);
+        // from_raw is Sized-only for Asc; leak the allocation.
+    }
+
+    #[test]
+    fn trait_object_deref_clone_drop() {
+        let a: Asc<dyn Debug> = Asc::new(String::from("hello"));
+        assert_eq!(format!("{a:?}"), "\"hello\"");
+
+        let b = a.clone();
+        assert_eq!(Asc::strong_count(&a), 2);
+        drop(b);
+        assert_eq!(Asc::strong_count(&a), 1);
+    }
+
+    #[test]
+    fn trait_object_pointer_fmt() {
+        let a: Asc<dyn Debug> = Asc::new(42i32);
+        let s = format!("{a:p}");
+        let expected = format!("{:p}", Asc::as_ptr(&a));
+        assert_eq!(s, expected);
+    }
+}
