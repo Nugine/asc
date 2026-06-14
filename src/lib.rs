@@ -262,10 +262,9 @@ impl<T> Asc<T> {
     /// See [`Arc::from_raw`].
     #[inline]
     #[must_use]
-    #[allow(clippy::as_conversions)]
     pub const unsafe fn from_raw(ptr: *const T) -> Self {
         let offset = mem::offset_of!(Inner<T>, data);
-        let inner = ptr.cast::<u8>().sub(offset) as *mut Inner<T>;
+        let inner = ptr.cast::<u8>().sub(offset).cast_mut().cast::<Inner<T>>();
         Self {
             inner: NonNull::new_unchecked(inner),
             _marker: PhantomData,
@@ -286,7 +285,6 @@ impl<T> Asc<T> {
     /// See [`Arc::increment_strong_count`].
     #[inline]
     #[allow(clippy::missing_const_for_fn)]
-    #[allow(clippy::as_conversions)]
     pub unsafe fn increment_strong_count(ptr: *const T) {
         let offset = mem::offset_of!(Inner<T>, data);
         let inner = ptr.cast::<u8>().sub(offset).cast::<Inner<T>>();
@@ -311,7 +309,6 @@ impl<T> Asc<T> {
     /// See [`Arc::decrement_strong_count`].
     #[inline]
     #[allow(clippy::missing_const_for_fn)]
-    #[allow(clippy::as_conversions)]
     pub unsafe fn decrement_strong_count(ptr: *const T) {
         let offset = mem::offset_of!(Inner<T>, data);
         let inner = ptr.cast::<u8>().sub(offset).cast_mut().cast::<Inner<T>>();
@@ -333,7 +330,6 @@ impl<T: ?Sized> Asc<T> {
 
     #[inline]
     #[must_use]
-    #[allow(clippy::as_conversions)]
     fn shallow_clone(&self) -> Self {
         let s = self.strong();
         let old = s.fetch_add(1, Relaxed);
