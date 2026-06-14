@@ -11,7 +11,6 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
-      - uses: taiki-e/install-action@just
       - uses: dtolnay/rust-toolchain@nightly
       - uses: rust-lang/crates-io-auth-action@v1
         id: auth
