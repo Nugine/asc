@@ -228,7 +228,7 @@ impl<T> Asc<T> {
     #[inline]
     pub fn try_unwrap(this: Self) -> Result<T, Self> {
         let s = this.strong();
-        if s.compare_exchange(1, 0, Relaxed, Relaxed).is_err() {
+        if s.compare_exchange(1, 0, Acquire, Relaxed).is_err() {
             return Err(this);
         }
         fence(Acquire);
