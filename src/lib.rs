@@ -1,18 +1,27 @@
 //! Atomic Strong Count.
 //!
-//! [`Asc`] is a drop-in replacement for [`std::sync::Arc`] when you don't
-//! need weak references. It provides shared, thread-safe ownership of
-//! heap-allocated data.
+//! [`Asc`] is a lighter alternative to [`Arc`] for use cases
+//! that don't need weak references. It provides shared, thread-safe
+//! ownership of heap-allocated data.
 //!
 //! # Key differences from [`Arc`]
 //!
 //! * No [`Weak`] references — the allocation is freed as soon as the last
-//!   [`Asc`] is dropped.
-//! * No allocator parameter — always uses the global allocator.
-//!   Custom allocators depend on the unstable [`allocator_api`] feature
-//!   and will be considered once it stabilizes.
-//! * [`Asc::from_raw`], [`Asc::as_ptr`], [`Asc::into_raw`], and
-//!   [`Asc::get_mut_unchecked`] are `const` functions.
+//!   [`Asc`] is dropped. This also means [`Asc`] cannot safely express
+//!   reference cycles.
+//! * Custom allocators are not yet supported — [`Asc`] always uses the
+//!   global allocator. This is blocked on the unstable
+//!   [`allocator_api`] feature and will be reconsidered once it stabilizes.
+//!
+//! # Cycle Warning
+//!
+//! [`Asc`] does **not** have weak references. Any reference cycle (e.g.,
+//! `A → B → A`) will cause a memory leak because the strong count never
+//! reaches zero. [`Asc`] is suitable for DAGs and tree structures; for
+//! general graphs with back-references, use [`Arc`] with
+//! [`Weak`].
+//!
+//! [`Weak`]: std::sync::Weak
 //!
 //! # Optional features
 //!
@@ -44,7 +53,6 @@
 //! assert_eq!(value, 42);
 //! ```
 //!
-//! [`Weak`]: std::sync::Weak
 //! [`UnwindSafe`]: std::panic::UnwindSafe
 //! [`RefUnwindSafe`]: std::panic::RefUnwindSafe
 //! [`CoerceUnsized`]: core::ops::CoerceUnsized
@@ -60,12 +68,6 @@
     clippy::must_use_candidate,
     clippy::missing_inline_in_public_items,
     clippy::missing_const_for_fn
-)]
-#![allow(
-    clippy::missing_safety_doc, // TODO
-    clippy::missing_errors_doc, // TODO
-    clippy::wildcard_imports,
-    clippy::enum_glob_use,
 )]
 //
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -93,7 +95,7 @@ use core::ptr;
 use core::ptr::NonNull;
 use core::sync::atomic::fence;
 use core::sync::atomic::AtomicUsize;
-use core::sync::atomic::Ordering::*;
+use core::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 
 use alloc::boxed::Box;
 
@@ -111,15 +113,21 @@ use std::panic::{RefUnwindSafe, UnwindSafe};
 
 /// Atomic Strong Count.
 ///
-/// [`Asc`] is a drop-in replacement for
-/// [`Arc`](https://doc.rust-lang.org/nightly/std/sync/struct.Arc.html)
-/// when you don't need weak references.
+/// [`Asc`] is a lighter alternative to [`Arc`] for use cases that don't
+/// need weak references.
 pub struct Asc<T: ?Sized> {
     inner: NonNull<Inner<T>>,
     _marker: PhantomData<T>,
 }
 
+// Safety: Asc<T> provides the same shared-ownership semantics as Arc<T>.
+// When T: Send + Sync, sharing T through Asc across thread boundaries is
+// sound because all accesses go through the same atomic reference-counting
+// and borrow-checking discipline as std's Arc.
 unsafe impl<T: Send + Sync> Send for Asc<T> {}
+
+// Safety: Asc<T> provides the same shared-ownership semantics as Arc<T>.
+// &Asc<T> gives access to &T via Deref, so if &T: Sync then &Asc<T>: Sync.
 unsafe impl<T: Send + Sync> Sync for Asc<T> {}
 
 #[cfg(feature = "std")]
@@ -149,7 +157,6 @@ fn box_into_nonnull<T>(b: Box<T>) -> NonNull<T> {
 }
 
 #[cfg(not(target_pointer_width = "64"))]
-#[allow(dead_code)]
 #[cold]
 fn critical() -> ! {
     struct Bomb {}
@@ -182,10 +189,10 @@ impl<T> Asc<T> {
     /// See [`Arc::pin`].
     #[inline]
     #[must_use]
-    pub fn pin(data: T) -> Pin<Asc<T>> {
+    pub fn pin(data: T) -> Pin<Self> {
         // Safety: Asc::new allocates the data on the heap, so its address
         // is stable for the lifetime of the allocation.
-        unsafe { Pin::new_unchecked(Asc::new(data)) }
+        unsafe { Pin::new_unchecked(Self::new(data)) }
     }
 
     /// Constructs a new `Asc<T>`.
@@ -207,13 +214,19 @@ impl<T> Asc<T> {
     /// Returns the inner value if the `Asc` has exactly one strong reference.
     ///
     /// See [`Arc::try_unwrap`].
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(self)` if there are other strong references to the
+    /// same allocation.
     #[inline]
     pub fn try_unwrap(this: Self) -> Result<T, Self> {
         let s = this.strong();
-        if s.compare_exchange(1, 0, Relaxed, Relaxed).is_err() {
+        if s.compare_exchange(1, 0, Acquire, Relaxed).is_err() {
             return Err(this);
         }
-        fence(Acquire);
+        // Acquire ordering on successful CAS already provides the
+        // necessary acquire semantics for reading the data below.
         unsafe {
             let this = ManuallyDrop::new(this);
             let data = ptr::read(&raw const this.inner.as_ref().data);
@@ -240,20 +253,69 @@ impl<T> Asc<T> {
     ///
     /// # Safety
     ///
-    /// The pointer must have been returned by a previous call to
-    /// [`Asc::into_raw`], and it must not have been passed to
-    /// [`Asc::from_raw`] more than once.
+    /// The pointer must have been obtained from [`Asc::into_raw`]. Each
+    /// call to this function consumes one outstanding strong reference;
+    /// the pointer must not be used to reconstruct more `Asc`s than the
+    /// number of live strong references.
     ///
     /// See [`Arc::from_raw`].
     #[inline]
     #[must_use]
-    #[allow(clippy::as_conversions)]
     pub const unsafe fn from_raw(ptr: *const T) -> Self {
         let offset = mem::offset_of!(Inner<T>, data);
-        let inner = ptr.cast::<u8>().sub(offset) as *mut Inner<T>;
+        let inner = ptr.cast::<u8>().sub(offset).cast_mut().cast::<Inner<T>>();
         Self {
             inner: NonNull::new_unchecked(inner),
             _marker: PhantomData,
+        }
+    }
+
+    /// Increments the strong reference count on the `Asc<T>` associated
+    /// with the provided pointer by one.
+    ///
+    /// # Safety
+    ///
+    /// The pointer must have been obtained from [`Asc::into_raw`] or
+    /// [`Asc::as_ptr`], and the underlying allocation must still be
+    /// live. Each call to this function creates one additional strong
+    /// reference that must be released with
+    /// [`Asc::decrement_strong_count`].
+    ///
+    /// See [`Arc::increment_strong_count`].
+    #[inline]
+    pub unsafe fn increment_strong_count(ptr: *const T) {
+        let offset = mem::offset_of!(Inner<T>, data);
+        let inner = ptr.cast::<u8>().sub(offset).cast::<Inner<T>>();
+        let strong = unsafe { &(*inner).strong };
+        let old = strong.fetch_add(1, Relaxed);
+        check_overflow(old);
+    }
+
+    /// Decrements the strong reference count on the `Asc<T>` associated
+    /// with the provided pointer. If the count reaches zero, the
+    /// allocation is freed.
+    ///
+    /// # Safety
+    ///
+    /// The pointer must have been obtained from [`Asc::into_raw`] or
+    /// [`Asc::as_ptr`], and the underlying allocation must still be
+    /// live (unless this call brings the count to zero). Each call
+    /// consumes one outstanding strong reference; the caller must
+    /// ensure this is paired with a prior
+    /// [`Asc::increment_strong_count`] or [`Asc::into_raw`].
+    ///
+    /// See [`Arc::decrement_strong_count`].
+    #[inline]
+    pub unsafe fn decrement_strong_count(ptr: *const T) {
+        let offset = mem::offset_of!(Inner<T>, data);
+        let inner = ptr.cast::<u8>().sub(offset).cast_mut().cast::<Inner<T>>();
+        let strong = unsafe { &(*inner).strong };
+        if strong.fetch_sub(1, Release) != 1 {
+            return;
+        }
+        fence(Acquire);
+        unsafe {
+            drop(box_from_nonnull(NonNull::new_unchecked(inner)));
         }
     }
 }
@@ -265,7 +327,6 @@ impl<T: ?Sized> Asc<T> {
 
     #[inline]
     #[must_use]
-    #[allow(clippy::as_conversions)]
     fn shallow_clone(&self) -> Self {
         let s = self.strong();
         let old = s.fetch_add(1, Relaxed);
@@ -298,6 +359,20 @@ impl<T: ?Sized> Asc<T> {
     #[must_use]
     pub fn ptr_eq(this: &Self, other: &Self) -> bool {
         ptr::eq(this.inner.as_ptr(), other.inner.as_ptr())
+    }
+
+    /// Returns `true` if this `Asc` has exactly one strong reference.
+    ///
+    /// This is a snapshot — the result may be stale by the time the
+    /// caller reads it, because [`Relaxed`] ordering does not
+    /// synchronize with other threads. For safety decisions use
+    /// [`Asc::get_mut`] which employs [`Acquire`] ordering.
+    ///
+    /// See [`Arc::is_unique`].
+    #[inline]
+    #[must_use]
+    pub fn is_unique(this: &Self) -> bool {
+        this.strong().load(Relaxed) == 1
     }
 
     /// Returns a mutable reference to the inner value if no other `Asc`s
@@ -404,7 +479,7 @@ impl<T: Clone> Asc<T> {
         let s = this.strong();
         let count = s.load(Acquire);
         if count > 1 {
-            *this = Asc::new(T::clone(&**this));
+            *this = Self::new(T::clone(&**this));
         }
         unsafe { &mut this.inner.as_mut().data }
     }
@@ -427,7 +502,7 @@ impl<T: ?Sized + fmt::Display> fmt::Display for Asc<T> {
 impl<T: ?Sized> fmt::Pointer for Asc<T> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Pointer::fmt(&Asc::as_ptr(self), f)
+        fmt::Pointer::fmt(&Self::as_ptr(self), f)
     }
 }
 
@@ -464,31 +539,31 @@ impl<T: ?Sized + Ord> Ord for Asc<T> {
 impl<T> From<T> for Asc<T> {
     #[inline]
     fn from(value: T) -> Self {
-        Asc::new(value)
+        Self::new(value)
     }
 }
 
 impl<T: Default> Default for Asc<T> {
     #[inline]
     fn default() -> Self {
-        Asc::new(T::default())
+        Self::new(T::default())
     }
 }
 
 #[cfg(feature = "serde")]
 mod serde_impl {
-    use super::*;
+    use super::Asc;
 
     use serde::{Deserialize, Serialize};
 
     #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
     impl<'de, T: Deserialize<'de>> Deserialize<'de> for Asc<T> {
         #[inline]
-        fn deserialize<D>(deserializer: D) -> Result<Asc<T>, D::Error>
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where
             D: ::serde::de::Deserializer<'de>,
         {
-            T::deserialize(deserializer).map(Asc::new)
+            T::deserialize(deserializer).map(Self::new)
         }
     }
 

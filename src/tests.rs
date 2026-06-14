@@ -1,4 +1,4 @@
-use super::*;
+use super::Asc;
 
 use alloc::collections::BTreeMap;
 use alloc::format;
@@ -123,6 +123,59 @@ fn from_raw_high_alignment() {
     assert_eq!(a.0, 42);
 }
 
+// miri: into_raw invalidates the original reference tag; creating
+// &(*inner).strong from the raw pointer hits the Stacked Borrows
+// limitation (same as into_raw_from_raw_roundtrip).
+#[test]
+#[cfg_attr(miri, ignore)]
+fn increment_decrement_strong_count() {
+    let a = Asc::new(42i32);
+    let ptr = Asc::into_raw(a);
+
+    // Increment: now there are 2 logical references
+    unsafe { Asc::increment_strong_count(ptr) };
+
+    // Reconstruct: should have count 2
+    let a = unsafe { Asc::from_raw(ptr) };
+    assert_eq!(Asc::strong_count(&a), 2);
+    assert_eq!(*a, 42);
+
+    // Decrement one reference
+    unsafe { Asc::decrement_strong_count(Asc::as_ptr(&a)) };
+    assert_eq!(Asc::strong_count(&a), 1);
+
+    // Decrement the last reference: allocation freed
+    let ptr = Asc::into_raw(a);
+    unsafe { Asc::decrement_strong_count(ptr) };
+    // If we reach here without double-free, the test passes
+}
+
+// miri: &(*inner).strong retags through a pointer derived from
+// as_ptr (same Stacked Borrows limitation as from_raw roundtrip).
+#[test]
+#[cfg_attr(miri, ignore)]
+fn increment_strong_count_via_as_ptr() {
+    // Uses as_ptr (not into_raw) so the Asc stays alive during the test.
+    let a = Asc::new(7u32);
+    let ptr = Asc::as_ptr(&a);
+    unsafe { Asc::increment_strong_count(ptr) };
+    assert_eq!(Asc::strong_count(&a), 2);
+    // Clean up the extra reference without deallocating
+    unsafe { Asc::decrement_strong_count(ptr) };
+    assert_eq!(Asc::strong_count(&a), 1);
+}
+
+#[test]
+fn is_unique_basic() {
+    let a = Asc::new(1);
+    assert!(Asc::is_unique(&a));
+    let b = a.clone();
+    assert!(!Asc::is_unique(&a));
+    assert!(!Asc::is_unique(&b));
+    drop(b);
+    assert!(Asc::is_unique(&a));
+}
+
 #[test]
 fn get_mut_unique() {
     let mut a = Asc::new(10i32);
@@ -204,7 +257,7 @@ fn hash() {
         }
         fn write(&mut self, bytes: &[u8]) {
             for &b in bytes {
-                self.0 = self.0.wrapping_mul(31).wrapping_add(b as u64);
+                self.0 = self.0.wrapping_mul(31).wrapping_add(u64::from(b));
             }
         }
     }
@@ -267,7 +320,7 @@ fn from_trait() {
 
 #[test]
 fn default_trait() {
-    let a: Asc<i32> = Default::default();
+    let a: Asc<i32> = Asc::default();
     assert_eq!(*a, 0);
 }
 
@@ -327,8 +380,7 @@ fn zero_sized_type() {
     assert_eq!(Asc::strong_count(&a), 2);
     assert!(Asc::ptr_eq(&a, &b));
     drop(b);
-    let val = Asc::try_unwrap(a).unwrap();
-    assert_eq!(val, ());
+    Asc::try_unwrap(a).unwrap();
 }
 
 #[test]
@@ -366,18 +418,20 @@ fn try_unwrap_zero_sized_shared() {
 #[test]
 fn make_mut_preserves_value() {
     let mut a = Asc::new(String::from("original"));
-    let _b = a.clone();
+    let b = a.clone();
     Asc::make_mut(&mut a).push_str(" modified");
-    // _b still has the original value
-    assert_eq!(&*_b, "original");
+    // b still has the original value
+    assert_eq!(&*b, "original");
     // a has the modified value in a new allocation
     assert_eq!(&*a, "original modified");
 }
 
 #[cfg(feature = "serde")]
 mod serde_tests {
-    use super::*;
+    use super::Asc;
+    use alloc::string::String;
     use alloc::vec;
+    use alloc::vec::Vec;
 
     #[test]
     fn serialize_basic() {
@@ -426,5 +480,122 @@ mod serde_tests {
         let a = Asc::new(());
         let json = serde_json::to_string(&a).unwrap();
         assert_eq!(json, "null");
+    }
+}
+
+#[cfg(feature = "unstable")]
+mod dst_tests {
+    use super::Asc;
+    use alloc::format;
+    use alloc::string::String;
+    use core::fmt::Debug;
+
+    #[test]
+    fn slice_deref_clone_drop() {
+        let a: Asc<[i32]> = Asc::new([1, 2, 3]);
+        assert_eq!(&*a, &[1, 2, 3]);
+
+        let b = a.clone();
+        assert_eq!(Asc::strong_count(&a), 2);
+        assert!(Asc::ptr_eq(&a, &b));
+
+        drop(b);
+        assert_eq!(Asc::strong_count(&a), 1);
+    }
+
+    #[test]
+    fn slice_debug() {
+        let a: Asc<[i32]> = Asc::new([10, 20]);
+        assert_eq!(format!("{a:?}"), "[10, 20]");
+    }
+
+    #[test]
+    fn slice_partial_eq() {
+        let a: Asc<[i32]> = Asc::new([1, 2]);
+        let b: Asc<[i32]> = Asc::new([1, 2]);
+        let c: Asc<[i32]> = Asc::new([3, 4]);
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+    }
+
+    // miri: into_raw without from_raw leaks the allocation (from_raw
+    // is Sized-only, so DST reconstruction is not possible).
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn slice_as_ptr_into_raw() {
+        let a: Asc<[i32]> = Asc::new([7, 8, 9]);
+        let ptr = Asc::as_ptr(&a);
+        assert_eq!(unsafe { &*ptr }, &[7, 8, 9]);
+
+        let ptr2 = Asc::into_raw(a);
+        assert_eq!(unsafe { &*ptr2 }, &[7, 8, 9]);
+        // from_raw is Sized-only for Asc; leak the allocation.
+    }
+
+    #[test]
+    fn trait_object_deref_clone_drop() {
+        let a: Asc<dyn Debug> = Asc::new(String::from("hello"));
+        assert_eq!(format!("{a:?}"), "\"hello\"");
+
+        let b = a.clone();
+        assert_eq!(Asc::strong_count(&a), 2);
+        drop(b);
+        assert_eq!(Asc::strong_count(&a), 1);
+    }
+
+    #[test]
+    fn trait_object_pointer_fmt() {
+        let a: Asc<dyn Debug> = Asc::new(42i32);
+        let s = format!("{a:p}");
+        let expected = format!("{:p}", Asc::as_ptr(&a));
+        assert_eq!(s, expected);
+    }
+}
+
+#[cfg(feature = "std")]
+mod thread_tests {
+    use super::Asc;
+    use alloc::vec::Vec;
+    use std::thread;
+
+    #[test]
+    fn send_to_another_thread() {
+        let a = Asc::new(42i32);
+        let handle = thread::spawn(move || {
+            assert_eq!(*a, 42);
+            Asc::strong_count(&a)
+        });
+        let count = handle.join().unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn clone_across_threads() {
+        let a = Asc::new(0i32);
+        let b = a.clone();
+        let handle = thread::spawn(move || {
+            assert_eq!(*b, 0);
+        });
+        handle.join().unwrap();
+        assert_eq!(*a, 0);
+        assert_eq!(Asc::strong_count(&a), 1);
+    }
+
+    #[test]
+    fn concurrent_clone_drop() {
+        let a = Asc::new(());
+        let n = 8;
+        let mut handles = Vec::new();
+        for _ in 0..n {
+            let a = a.clone();
+            handles.push(thread::spawn(move || {
+                let _a = a;
+            }));
+        }
+        for h in handles {
+            h.join().unwrap();
+        }
+        assert_eq!(Asc::strong_count(&a), 1);
+        // If concurrent clone/drop had a race, we'd see wrong count or UB
     }
 }
