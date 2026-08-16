@@ -154,7 +154,7 @@ unsafe fn box_from_nonnull<T: ?Sized>(p: NonNull<T>) -> Box<T> {
 }
 
 fn box_into_nonnull<T>(b: Box<T>) -> NonNull<T> {
-    NonNull::from_mut(Box::leak(b))
+    NonNull::new(std::ptr::from_mut(Box::leak(b))).unwrap()
 }
 
 #[cfg(not(target_pointer_width = "64"))]
