@@ -154,7 +154,7 @@ unsafe fn box_from_nonnull<T: ?Sized>(p: NonNull<T>) -> Box<T> {
 }
 
 fn box_into_nonnull<T>(b: Box<T>) -> NonNull<T> {
-    unsafe { NonNull::new_unchecked(Box::into_raw(b)) }
+    NonNull::from_mut(Box::leak(b))
 }
 
 #[cfg(not(target_pointer_width = "64"))]
